@@ -5,33 +5,30 @@ from threading import Thread
 from multiprocessing import Process, Queue
 from json import loads
 from binascii import hexlify
-from smspdu.codecs import GSM, UCS2
+from smspdu.codecs import UCS2
 
-bord01 = serial.Serial('/dev/ttyUSB3', baudrate=921600, timeout=None)
+bord01 = serial.Serial('/dev/ttyUSB0', baudrate=921600, timeout=None)
 bord01.flushInput()
 
 sleep(1)
 DataBySerial = Queue()
+SerialRecived = Queue()
+SerialToSend = Queue()
 
 
 # Process 1
 
-def Process1(T11, T12, T13, DataBySerial):
+def Process1(T11, T12, Recived, Send):
 
-    RawData = Queue()
-    UploadData = Queue()
+    T_11 = Thread(target=T11, args=(Recived,))
+    T_12 = Thread(target=T12, args=(Send, ))
 
-    T_11 = Thread(target=T11, args=(RawData,))
-    T_12 = Thread(target=T12, args=(RawData, UploadData))
-    T_13 = Thread(target=T13, args=(UploadData, DataBySerial))
 
     T_11.start()
     T_12.start()
-    T_13.start()
 
     T_11.join()
     T_12.join()
-    T_13.join()
 
 
 # T11
@@ -46,7 +43,7 @@ def TakeDataFromSerial(queue):
         except: # Exception as e:
             pass # print(e)
 
-# T12
+# T21
 def ManageRawData(queue1, queue2):
     while True:
         sleep(0.1)
@@ -74,7 +71,7 @@ def ManageRawData(queue1, queue2):
                         #     "Content": tc[1].replace('\r\n', '').strip()
                         # }
                         phone = UCS2.decode(da[1].replace('"', ''))
-                        Content = UCS2.decode('002A')
+                        Content = UCS2.decode(tc[1].replace('\r\n'))
 
                         print(da[1])
                         finalData = {
@@ -91,7 +88,7 @@ def ManageRawData(queue1, queue2):
             else:
                 print(income)
 
-# T13
+# T23
 def UploadOurData(queue1, queue2):
     while True:
         sleep(0.1)
@@ -106,11 +103,10 @@ def UploadOurData(queue1, queue2):
 
 
 # Process 2
-def Process2(T21, T22, queue):
+def Process2(T21, T22, T23, Resave, Send):
 
-
-
-    T_21 = Thread(target=T21, args=(queue,))
+    incomeSms = Queue()
+    T_21 = Thread(target=T21, args=(Resave, incomeSms))
     T_22 = Thread(target=T22, args=(queue, ))
 
     T_21.start()
@@ -119,7 +115,7 @@ def Process2(T21, T22, queue):
     T_21.join()
     T_22.join()
 
-# T21
+# T22
 def DownloadData(queue):
         while True:
             sleep(0.1)
@@ -138,17 +134,14 @@ def SendDataToSerial(queue):
         sleep(0.1)
         if not queue.empty():
             res = loads(queue.get())
-            recaver = hexlify(res['smsReciver'].encode())
-            content = hexlify(res['smsContent'].encode())
-            payload = "SendSms⁁⁂⁁0⁁⁂⁁123⁂⁁⁂" + "00"+recaver.decode() + "⁂⁁⁂"+ content.decode()
+            recaver = UCS2.encode(res['smsReciver'])
+            content = UCS2.encode(res['smsContent'])
+            payload = "SendSms⁁⁂⁁0⁁⁂⁁123⁂⁁⁂" + "00"+recaver + "⁂⁁⁂"+ content
             print(payload)
             bord01.write(payload.encode())
 
-
-
-
-P1 = Process(target=Process1, args=(TakeDataFromSerial, ManageRawData, UploadOurData, DataBySerial))
-P2 = Process(target=Process2, args=(DownloadData, SendDataToSerial, DataBySerial))
+P1 = Process(target=Process1, args=(TakeDataFromSerial, SendDataToSerial, SerialRecived, SerialToSend))
+P2 = Process(target=Process2, args=(ManageRawData, DownloadData, UploadOurData, SerialRecived, SerialToSend))
 
 P1.start()
 P2.start()
