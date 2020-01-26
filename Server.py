@@ -7,7 +7,7 @@ from json import loads
 from binascii import hexlify
 from smspdu.codecs import UCS2
 
-bord01 = serial.Serial('/dev/ttyUSB3', baudrate=921600, timeout=None)
+bord01 = serial.Serial('/dev/ttyUSB0', baudrate=921600, timeout=None)
 bord01.flushInput()
 
 sleep(1)
@@ -49,7 +49,8 @@ def toEsp32(queue):
             res = loads(queue.get())
             recaver = UCS2.encode(res['smsReciver'])
             content = UCS2.encode(res['smsContent'])
-            payload = "SendSms⁁⁂⁁0⁁⁂⁁123⁂⁁⁂" + "00" + recaver + "⁂⁁⁂" + content
+            print(res['smsContent'])
+            payload = "SendSms⁁⁂⁁0⁁⁂⁁123⁂⁁⁂"+ recaver + "⁂⁁⁂" + content
             print(payload)
             bord01.write(payload.encode())
 
@@ -97,19 +98,19 @@ def manageSerialFromEsp32(queue1, queue2):
                         #     "Time": tc[0],
                         #     "Content": tc[1].replace('\r\n', '').strip()
                         # }
-                        phone = da[1].replace('\"', '')
-                        Content = tc[1].replace('\r\n')
+                        phone = UCS2.decode(da[1].replace('\"', ''))
+                        Content = UCS2.decode(tc[1].replace('\r\n','').replace(' ', ''))
 
-                        print(f'da[a] : {da[1]}')
-                        print(f'tc[a] : {tc[1]}')
-                        print(f'Phone : {phone}')
-                        print(f'Content : {Content}')
-                        # finalData = {
-                        #     "companyPhone": "0999991230",
-                        #     "senderPhone": phone,
-                        #     "messageContent": Content
-                        # }
-                        # queue2.put(finalData)
+                        # print(f'da[a] : {da[1]}')
+                        # print(f'tc[a] : {tc[1]}')
+                        # print(f'Phone : {phone}')
+                        # print(f'Content : {Content}')
+                        finalData = {
+                            "companyPhone": "0999991230",
+                            "senderPhone": phone,
+                            "messageContent": Content
+                        }
+                        queue2.put(finalData)
                         print('Data From Manage T12 : ' + str(finalData))
             elif dataS1[0] == "SmsSendReport":
                 result = dataS1[1]
@@ -142,7 +143,6 @@ def rotainCheck(queue):
                           headers={'Content-Type': 'application/json'})
         if r.status_code == '200':
             queue.put(r.text)
-            print('Data From Download T21 : ' + str(r.text))
 
 
 P1 = Process(target=process_1, args=(fromEsp32, toEsp32, esp32ToPc, pcToEsp32))
