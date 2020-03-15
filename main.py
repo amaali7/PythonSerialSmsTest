@@ -102,13 +102,8 @@ def manageSerialFromEsp32(queue1, queue2):
                         smsDict = decodeSmsPdu(sms)
                         nsms = ReceivedSms( 0, smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh', []))
                         messages.append(nsms)
-                    
-                finalData = {
-                    "companyPhone": "0999991230",
-                    "senderPhone": phone,
-                    "messageContent": Content
-                }
-                queue2.put(finalData)
+                    for massage in messages:
+                        newM =  handleSms(massage)   
                 
             elif dataS1[0] == "SmsSendReport":
                 result = dataS1[1]
