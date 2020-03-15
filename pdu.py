@@ -242,7 +242,7 @@ class Pdu(object):
         return str(self.data).encode('hex').upper()
 
 
-def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requestStatusReport=True, rejectDuplicates=False, sendFlash=False):
+def encodeSmsSubmitPdu(number, text, reference=0, validity=None, smsc=None, requestStatusReport=False, rejectDuplicates=False, sendFlash=False):
     """ Creates an SMS-SUBMIT PDU for sending a message with the specified text to the specified number
 
     :param number: the destination mobile number

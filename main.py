@@ -7,33 +7,14 @@ from json import loads
 from pdu import encodeSmsSubmitPdu, decodeSmsPdu
 import abc
 
+from utilty import handleSms, Sms, ReceivedSms
+
 bord01 = serial.Serial('/dev/ttyUSB0', baudrate=921600, timeout=None)
 bord01.flushInput()
 
 sleep(1)
 esp32ToPc = Queue()
 pcToEsp32 = Queue()
-
-class Sms(object):
-    """ Abstract SMS message base class """
-    __metaclass__ = abc.ABCMeta
-
-    # Some constants to ease handling SMS statuses
-    STATUS_RECEIVED_UNREAD = 0
-    def __init__(self, number, text, smsc=None):
-        self.number = number
-        self.text = text
-        self.smsc = smsc
-
-
-class ReceivedSms(Sms):
-    """ An SMS message that has been received (MT) """
-
-    def __init__(self, number, time, text, smsc=None, udh=[]):
-        super(ReceivedSms, self).__init__(number, text, smsc)
-        self.time = time
-        self.udh = udh
-
 
 
 
@@ -55,8 +36,7 @@ def fromEsp32(queue):
     while True:
         try:
             # ascii
-            ser_bytes = bord01.readline()
-            sbuffer = ser_bytes.decode()
+            sbuffer = bord01.readline().decode()
             queue.put(sbuffer)
             sleep(0.001)
         except:  # Exception as e:
@@ -68,10 +48,19 @@ def toEsp32(queue):
         sleep(0.001)
         if not queue.empty():
             res = loads(queue.get())
-            recaver = None
-            content = None
-            print(res['smsContent'])
-            payload = "SendSms⁁⁂⁁0⁁⁂⁁123⁂⁁⁂"+ recaver + "⁂⁁⁂" + content
+            recaver = res['smsReciver']
+            content = res['smsContent']
+            smsPduPayload = encodeSmsSubmitPdu(recaver, content)
+            mPayload = "SendSms⁁⁂⁁0⁁⁂⁁123⁁⁂⁁1⁂⁁⁂"+ len(smsPduPayload) + "⁁⁂⁁"
+            for idx, val in enumerate(smsPduPayload):
+                if len(smsPduPayload)>1:
+                    if idx == 0:
+                        payload = mPayload + idx + "⁂⁁⁂" + val.tpduLength + "⁂⁁⁂" + val
+                    else:
+                        payload += "⁁⁂⁁" + idx + "⁂⁁⁂" + val.tpduLength + "⁂⁁⁂" + val
+                else:
+                    payload = "SendSms⁁⁂⁁0⁁⁂⁁123⁁⁂⁁0⁂⁁⁂"+ val.tpduLength + "⁂⁁⁂" + val
+                            
             print(payload)
             bord01.write(payload.encode())
 
@@ -108,25 +97,19 @@ def manageSerialFromEsp32(queue1, queue2):
                 # print(f'Sms List is : {result}')
                 fresult = result.split("⁂⁁⁂")
                 messages = []
-                for sms in fresult:
-                    oneToTwo = sms.split('!')
-                    smsDict = decodeSmsPdu(oneToTwo[1])
-                    sms = ReceivedSms(smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh'))
-                    messages.append(sms)
-                index = 1
-                for massage in massage:
-                    print(index)
-                    index = index + 1
-                    print(f'Phone : {massage.number}')
-                    print(f'Text : {massage.text}')
-
-                # finalData = {
-                #     "companyPhone": "0999991230",
-                #     "senderPhone": phone,
-                #     "messageContent": Content
-                # }
-                # queue2.put(finalData)
-                # print('Data From Manage T12 : ' + str(finalData))
+                if fresult.pop(0) == 0:
+                    for sms in fresult:
+                        smsDict = decodeSmsPdu(sms)
+                        nsms = ReceivedSms( 0, smsDict['number'], smsDict['time'], smsDict['text'], smsDict['smsc'], smsDict.get('udh', []))
+                        messages.append(nsms)
+                    
+                finalData = {
+                    "companyPhone": "0999991230",
+                    "senderPhone": phone,
+                    "messageContent": Content
+                }
+                queue2.put(finalData)
+                
             elif dataS1[0] == "SmsSendReport":
                 result = dataS1[1]
                 fresult = result.split("⁂⁁⁂")
